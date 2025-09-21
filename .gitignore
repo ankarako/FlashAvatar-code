@@ -13,3 +13,4 @@ flame/FLAME_masks
 .venv
 chkp
 .vscode
+build
