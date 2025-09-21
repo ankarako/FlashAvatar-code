@@ -1,3 +1,4 @@
+from typing import List
 import os, sys
 import random
 import json
@@ -129,7 +130,7 @@ class SceneGaussianAvatars:
         :param transforms_filename
         :param prefetch
         """
-        self.dataset = tloaders.DatasetRegistry.get_dataset(
+        self.dataset: tloaders.GaussianAvatars = tloaders.DatasetRegistry.get_dataset(
             "GaussianAvatars",
             data_root=data_root,
             transforms_filename=transforms_filename,
@@ -137,4 +138,37 @@ class SceneGaussianAvatars:
         )
 
         # parse our flame samples to Camera objects
+        self.cameras = []
+        parsing_loop = tqdm(
+            enumerate(self.dataset.cam_infos),
+            total=len(self.dataset.cam_infos),
+            desc="Parsing GaussianAvatars to Scene"
+        )
+        sample: tloaders.CameraFlameInfo
+        for idx, sample in parsing_loop:
+            fovx = sample.fovx
+            fovy = sample.fovy
+            c2w = sample.c2w
+            width, height = sample.width, sample.height
+            shape_params = sample.fl_id_params
+            expr_params = sample.fl_ex_params
+            fl_rot = sample.fl_rot
+            fl_neck = sample.fl_neck
+            fl_jaw = sample.fl_jaw
+            fl_eyes = sample.fl_eyes
+            fl_trans = sample.fl_trans
+            fl_static_offsets = sample.fl_static_offset
+
+            image_path = sample.image_path
+            R = sample.R
+            T = sample.T
+            self.cameras += [Camera(
+                sample.uid,
+                R, T,
+                fovx, fovy,
+            )]
+
+    
+    def getCameras(self) -> List[Camera]:
+        return self.cameras
 

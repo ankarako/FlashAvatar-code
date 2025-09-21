@@ -1,0 +1,1 @@
+from face_parsing.face_parsing_pytorch.test import evaluate

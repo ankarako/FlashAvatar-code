@@ -1,8 +1,8 @@
 #!/usr/bin/python
 # -*- encoding: utf-8 -*-
 
-from logger import setup_logger
-from model import BiSeNet
+from face_parsing.face_parsing_pytorch.logger import setup_logger
+from face_parsing.face_parsing_pytorch.model import BiSeNet
 
 import torch
 
