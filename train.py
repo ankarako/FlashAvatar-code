@@ -7,13 +7,24 @@ import argparse
 import cv2
 import lpips
 
-from scene import GaussianModel, Scene_mica
+from scene import GaussianModel, Scene_mica, SceneGaussianAvatars
 from src.deform_model import Deform_Model
 from gaussian_renderer import render
 from arguments import ModelParams, PipelineParams, OptimizationParams
 from utils.loss_utils import huber_loss
 from utils.general_utils import normalize_for_percep
 
+from PIL import Image
+
+k_flame_kwargs = {
+    'model_path': 'flame/flame2023/flame2023.pkl',
+    'mesh_path': 'flame/flame2023/head_template_mesh.obj',
+    'masks_path': 'flame/flame2023/FLAME_masks.pkl',
+    'lmk_embedding_with_eyes_path': 'flame/flame2023/landmark_embedding_with_eyes.npy',
+    'nid_params': 300,
+    'nex_params': 100,
+    'add_teeth': True
+}
 
 def set_random_seed(seed):
     r"""Set random seeds for everything.
@@ -38,6 +49,8 @@ if __name__ == "__main__":
     parser.add_argument('--idname', type=str, default='id1_25', help='id name')
     parser.add_argument('--image_res', type=int, default=512, help='image resolution')
     parser.add_argument("--start_checkpoint", type=str, default = None)
+    parser.add_argument("--ga_data_root", type=str, help="The root directory of the GaussianAvatars dataset to use.")
+    parser.add_argument("--ga_transforms_fname", type=str, default="transforms_train.json", help="The transforms filename to use.")
     args = parser.parse_args(sys.argv[1:])
     args.device = "cuda"
     lpt = lp.extract(args)
@@ -50,20 +63,21 @@ if __name__ == "__main__":
     percep_module = lpips.LPIPS(net='vgg').to(args.device)
 
     ## deform model
-    DeformModel = Deform_Model(args.device).to(args.device)
+    DeformModel = Deform_Model(args.device, **k_flame_kwargs).to(args.device)
     DeformModel.training_setup()
 
     ## dataloader
-    data_dir = os.path.join('dataset', args.idname)
-    mica_datadir = os.path.join('metrical-tracker/output', args.idname)
-    log_dir = os.path.join(data_dir, 'log')
+    data_dir = os.path.join('/media/perukas/home/dev/datasets/example/metrical-tracker/output/', 'Obama')
+    mica_datadir = os.path.join('/media/perukas/home/dev/datasets/example/metrical-tracker/output', 'Obama')
+    log_dir = os.path.join('output', 'log')
     train_dir = os.path.join(log_dir, 'train')
     model_dir = os.path.join(log_dir, 'ckpt')
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(train_dir, exist_ok=True)
     os.makedirs(model_dir, exist_ok=True)
-    scene = Scene_mica(data_dir, mica_datadir, train_type=0, white_background=lpt.white_background, device = args.device)
+    # scene = Scene_mica(data_dir, mica_datadir, train_type=0, white_background=lpt.white_background, device = args.device)
     
+    scene = SceneGaussianAvatars(args.ga_data_root, args.ga_transforms_fname)
     first_iter = 0
     gaussians = GaussianModel(lpt.sh_degree)
     gaussians.training_setup(opt)
@@ -77,7 +91,7 @@ if __name__ == "__main__":
     
     codedict = {}
     codedict['shape'] = scene.shape_param.to(args.device)
-    DeformModel.example_init(codedict)
+    DeformModel.example_init(codedict, scene.static_offset)
 
     viewpoint_stack = None
     first_iter += 1
@@ -91,16 +105,20 @@ if __name__ == "__main__":
         if not viewpoint_stack:
             viewpoint_stack = scene.getCameras().copy()
             random.shuffle(viewpoint_stack)
-            if len(viewpoint_stack)>2000:
-                viewpoint_stack = viewpoint_stack[:2000]
+            # if len(viewpoint_stack)>2000:
+            #     viewpoint_stack = viewpoint_stack[:2000]
+
         viewpoint_cam = viewpoint_stack.pop(random.randint(0, len(viewpoint_stack)-1)) 
         frame_id = viewpoint_cam.uid
 
         # deform gaussians
         codedict['expr'] = viewpoint_cam.exp_param
         codedict['eyes_pose'] = viewpoint_cam.eyes_pose
-        codedict['eyelids'] = viewpoint_cam.eyelids
+        # codedict['eyelids'] = viewpoint_cam.eyelids if hasattr(viewpoint_cam, 'eyelids') else None
         codedict['jaw_pose'] = viewpoint_cam.jaw_pose 
+        codedict['neck_pose'] = viewpoint_cam.neck_pose
+        codedict['rotation'] = viewpoint_cam.rot
+        codedict['translation'] = viewpoint_cam.flame_trans
         verts_final, rot_delta, scale_coef = DeformModel.decode(codedict)
         
         if iteration == 1:
@@ -114,12 +132,26 @@ if __name__ == "__main__":
 
         # Loss
         gt_image = viewpoint_cam.original_image
+        if gt_image is None:
+            gt_image = Image.open(viewpoint_cam.image_path).convert('RGB')
+            gt_image = np.array(gt_image).astype(np.float32) / 255.0
+            gt_image = torch.from_numpy(gt_image).to(args.device).permute(2, 0, 1)
+
         mouth_mask = viewpoint_cam.mouth_mask
+        if mouth_mask is None:
+            mouth_mask = Image.open(viewpoint_cam.mouth_mask_path).convert('L')
+            mouth_mask = np.array(mouth_mask).astype(np.float32) / 255.0
+            mouth_mask = torch.from_numpy(mouth_mask).to(args.device).unsqueeze(0)
         
         loss_huber = huber_loss(image, gt_image, 0.1) + 40*huber_loss(image*mouth_mask, gt_image*mouth_mask, 0.1)
         
         loss_G = 0.
         head_mask = viewpoint_cam.head_mask
+        if head_mask is None:
+            head_mask = Image.open(viewpoint_cam.head_mask_path).convert('L')
+            head_mask = np.array(head_mask).astype(np.float32) / 255.0
+            head_mask = torch.from_numpy(head_mask).to(args.device).unsqueeze(0)
+
         image_percep = normalize_for_percep(image*head_mask)
         gt_image_percep = normalize_for_percep(gt_image*head_mask)
         if iteration>mid_num:
@@ -146,12 +178,18 @@ if __name__ == "__main__":
             
             # visualize results
             if iteration % 500 == 0 or iteration==1:
-                save_image = np.zeros((args.image_res, args.image_res*2, 3))
+                save_image = np.zeros([viewpoint_cam.image_height, viewpoint_cam.image_width *2, 3])
                 gt_image_np = (gt_image*255.).permute(1,2,0).detach().cpu().numpy().astype(np.uint8)
                 image = image.clamp(0, 1)
                 image_np = (image*255.).permute(1,2,0).detach().cpu().numpy().astype(np.uint8)
-                save_image[:, :args.image_res, :] = gt_image_np
-                save_image[:, args.image_res:, :] = image_np
+                save_image[:, :viewpoint_cam.image_width, :] = gt_image_np
+                save_image[:, viewpoint_cam.image_width:, :] = image_np
+                # save_image = np.zeros((args.image_res, args.image_res*2, 3))
+                # gt_image_np = (gt_image*255.).permute(1,2,0).detach().cpu().numpy().astype(np.uint8)
+                # image = image.clamp(0, 1)
+                # image_np = (image*255.).permute(1,2,0).detach().cpu().numpy().astype(np.uint8)
+                # save_image[:, :args.image_res, :] = gt_image_np
+                # save_image[:, args.image_res:, :] = image_np
                 cv2.imwrite(os.path.join(train_dir, f"{iteration}.jpg"), save_image[:,:,[2,1,0]])
             
             # save checkpoint

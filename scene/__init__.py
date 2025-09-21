@@ -9,7 +9,7 @@ import numpy as np
 from tqdm import tqdm
 
 from scene.gaussian_model import GaussianModel
-from scene.cameras import Camera
+from scene.cameras import Camera, CameraGaussianAvatars
 from arguments import ModelParams
 from utils.general_utils import PILtoTensor
 from utils.graphics_utils import focal2fov
@@ -144,28 +144,66 @@ class SceneGaussianAvatars:
             total=len(self.dataset.cam_infos),
             desc="Parsing GaussianAvatars to Scene"
         )
-        sample: tloaders.CameraFlameInfo
+        sample: tloaders.NersembleCamInfo
         for idx, sample in parsing_loop:
-            fovx = sample.fovx
-            fovy = sample.fovy
+            K = sample.K
+            fx = K[0, 0]
+            fy = K[1, 1]
+            fovx = focal2fov(fx, sample.width)
+            fovy = focal2fov(fy, sample.height)
+            
             c2w = sample.c2w
             width, height = sample.width, sample.height
-            shape_params = sample.fl_id_params
-            expr_params = sample.fl_ex_params
-            fl_rot = sample.fl_rot
-            fl_neck = sample.fl_neck
-            fl_jaw = sample.fl_jaw
-            fl_eyes = sample.fl_eyes
-            fl_trans = sample.fl_trans
-            fl_static_offsets = sample.fl_static_offset
+            shape_params = sample.flame_id_params
+            expr_params = sample.flame_ex_params
+            fl_rot = sample.flame_rotation
+            fl_neck = sample.flame_neck
+            fl_jaw = sample.flame_jaw
+            fl_eyes = sample.flame_eyes
+            fl_trans = sample.flame_translation
+            fl_static_offsets = sample.flame_static_offset
 
             image_path = sample.image_path
-            R = sample.R
-            T = sample.T
-            self.cameras += [Camera(
-                sample.uid,
-                R, T,
-                fovx, fovy,
+            msk_path = sample.mask_name
+            
+            self.shape_param = torch.from_numpy(shape_params).unsqueeze(0)
+            self.static_offset = torch.from_numpy(fl_static_offsets)
+
+            # dataset must be proprocessed with
+            # face_parsing.
+            # see preproc_ga_fparsing.py
+            mask_dir = os.path.dirname(msk_path)
+            mask_fname = os.path.basename(msk_path)
+            mouth_mask_path = os.path.join(mask_dir, '..', 'parsing', f'{mask_fname.replace(".png","")}_mouth.png')
+            
+            c2w = np.linalg.inv(c2w)
+            T = c2w[:3, 3]
+            R = np.transpose(c2w[:3, :3])
+            
+
+            self.cameras += [CameraGaussianAvatars(
+                uid = sample.uid,
+                R=R,
+                T=T,
+                FoVx=fovx,
+                FoVy=fovy,
+                image_path=image_path,
+                mask_path=msk_path,
+                mouth_mask_path=mouth_mask_path,
+                image=None,
+                head_mask=None,
+                mouth_mask=None,
+                exp_param=expr_params,
+                eyes_pose=fl_eyes,
+                eyelids=None,
+                jaw_pose=fl_jaw,
+                neck_pose=fl_neck,
+                rot=fl_rot,
+                fl_trans=fl_trans,
+                image_name=image_path,
+                width=width,
+                height=height,
+                colmap_id=sample.uid
             )]
 
     

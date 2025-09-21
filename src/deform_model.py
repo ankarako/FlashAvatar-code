@@ -10,14 +10,16 @@ from pytorch3d.io import load_obj
 from flame import FLAME_mica, parse_args
 from utils.general_utils import Pytorch3dRasterizer, Embedder, load_binary_pickle, a_in_b_torch, face_vertices_gen
 
-
+import t3d
 class Deform_Model(nn.Module):
-    def __init__(self, device):
+    def __init__(self, device, **flame_kwargs):
         super().__init__()
         self.device = device
         
         mica_flame_config = parse_args()
-        self.flame_model = FLAME_mica(mica_flame_config).to(self.device)
+        # self.flame_model = FLAME_mica(mica_flame_config).to(self.device)
+
+        self.flame_model = t3d.Flame2023(**flame_kwargs).to(self.device)
         self.default_shape_code = torch.zeros(1, 300, device=self.device)
         self.default_expr_code = torch.zeros(1, 100, device=self.device)
         
@@ -50,20 +52,32 @@ class Deform_Model(nn.Module):
     def init_networks(self):       
         ## full mica 
         self.deformNet = MLP(
-            input_dim=self.pts_embedder.dim_embeded+120,
+            input_dim=self.pts_embedder.dim_embeded+118, # flame2023
             output_dim=10,
             hidden_dim=256,
             hidden_layers=6
         )
         
-    def example_init(self, codedict):
+    def example_init(self, codedict, static_offset):
         # speed up
         shape_code = codedict['shape'].detach()
         batch_size = shape_code.shape[0]
-        geometry_shape = self.flame_model.forward_geo(
+        # geometry_shape = self.flame_model.forward_geo(
+        #     shape_code,
+        #     expression_params = self.default_expr_code
+        # )
+        geometry_shape = self.flame_model.forward(
             shape_code,
-            expression_params = self.default_expr_code
+            ex_params=self.default_expr_code,
+            rotation=torch.zeros([1, 3], device=self.device),
+            neck=torch.zeros([1, 3], device=self.device),
+            jaw=torch.zeros([1, 3], device=self.device),
+            eyes=torch.zeros([1, 6], device=self.device),
+            translation=torch.zeros([1, 3], device=self.device),
+            static_offset=static_offset.to(self.device),
+            return_lmks=False
         )
+        self.static_offset = static_offset.to(self.device)
 
         face_vertices_shape = face_vertices_gen(geometry_shape, self.tri_faces.expand(batch_size, -1, -1))
         rast_out, pix_to_face, bary_coords = self.uv_rasterizer(self.uvcoords.expand(batch_size, -1, -1),
@@ -99,10 +113,17 @@ class Deform_Model(nn.Module):
         shape_code = codedict['shape'].detach()
         expr_code = codedict['expr'].detach()
         jaw_pose = codedict['jaw_pose'].detach()
-        eyelids = codedict['eyelids'].detach()
+        neck_pose = codedict['neck_pose'].detach()
+        rot = codedict['rotation'].detach()
+        trans = codedict['translation'].detach()
+
+        # eyelids = codedict['eyelids'].detach() if codedict['eyelids'] is not None else None
+        
         eyes_pose = codedict['eyes_pose'].detach()
         batch_size = shape_code.shape[0]
-        condition = torch.cat((expr_code, jaw_pose, eyes_pose, eyelids), dim=1)
+
+        # condition = torch.cat((expr_code, jaw_pose, eyes_pose, eyelids), dim=1)
+        condition = torch.cat((expr_code, rot, neck_pose, jaw_pose, eyes_pose, trans), dim=1)
 
         # MLP
         condition = condition.unsqueeze(1).repeat(1, self.v_num, 1)
@@ -117,13 +138,24 @@ class Deform_Model(nn.Module):
         scale_coef = deforms[..., 7:]
         scale_coef = torch.exp(scale_coef)
 
-        geometry = self.flame_model.forward_geo(
+        geometry = self.flame_model.forward(
             shape_code,
-            expression_params=expr_code,
-            jaw_pose_params=jaw_pose,
-            eye_pose_params=eyes_pose,
-            eyelid_params=eyelids,
+            expr_code,
+            rot,
+            neck_pose,
+            jaw_pose,
+            eyes_pose,
+            trans,
+            static_offset=self.static_offset,
+            return_lmks=False
         )
+        # geometry = self.flame_model.forward_geo(
+        #     shape_code,
+        #     expression_params=expr_code,
+        #     jaw_pose_params=jaw_pose,
+        #     eye_pose_params=eyes_pose,
+        #     eyelid_params=None,
+        # )
         face_vertices = face_vertices_gen(geometry, self.tri_faces.expand(batch_size, -1, -1))
 
         # rasterize face_vertices to uv space
