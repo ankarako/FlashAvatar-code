@@ -13,6 +13,8 @@ from arguments import ModelParams
 from utils.general_utils import PILtoTensor
 from utils.graphics_utils import focal2fov
 
+import tloaders
+
 
 class Scene_mica:
     def __init__(self, datadir, mica_datadir, train_type, white_background, device):
@@ -110,3 +112,29 @@ class Scene_mica:
 
 
     
+class SceneGaussianAvatars:
+    """
+    Implements Nersemble gausian avatars scene dataloading.
+    """
+    def __init__(
+        self,
+        data_root: str,
+        transforms_filename: str,
+        prefetch: bool=False
+    ) -> None:
+        """
+        Initialize a SceneGaussianAvatars object
+
+        :param data_root
+        :param transforms_filename
+        :param prefetch
+        """
+        self.dataset = tloaders.DatasetRegistry.get_dataset(
+            "GaussianAvatars",
+            data_root=data_root,
+            transforms_filename=transforms_filename,
+            prefetch=prefetch
+        )
+
+        # parse our flame samples to Camera objects
+
