@@ -10,3 +10,6 @@ metrical-tracker
 flame/generic_model.pkl
 flame/FLAME_masks
 
+.venv
+
+
