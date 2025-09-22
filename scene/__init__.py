@@ -179,7 +179,9 @@ class SceneGaussianAvatars:
             c2w = np.linalg.inv(c2w)
             T = c2w[:3, 3]
             R = np.transpose(c2w[:3, :3])
-            
+
+            # fl_trans[:, 1] += 0.07
+        
 
             self.cameras += [CameraGaussianAvatars(
                 uid = sample.uid,
