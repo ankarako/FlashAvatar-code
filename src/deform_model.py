@@ -27,7 +27,7 @@ class Deform_Model(nn.Module):
         self.pts_freq = 8
         self.pts_embedder = Embedder(self.pts_freq)
         
-        _, faces, aux = load_obj('flame/FlameMesh.obj', load_textures=False)
+        _, faces, aux = load_obj('flame/head_template_mesh.obj', load_textures=False)
         uv_coords = aux.verts_uvs[None, ...]
         uv_coords = uv_coords * 2 - 1
         uv_coords[..., 1] = - uv_coords[..., 1]
@@ -147,7 +147,8 @@ class Deform_Model(nn.Module):
             eyes_pose,
             trans,
             static_offset=self.static_offset,
-            return_lmks=False
+            return_lmks=False,
+            zero_centered_at_root_node=False
         )
         # geometry = self.flame_model.forward_geo(
         #     shape_code,

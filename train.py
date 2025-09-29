@@ -159,6 +159,7 @@ if __name__ == "__main__":
 
         loss = loss_huber*1 + loss_G*1
 
+        # TODO
         loss.backward()
 
         with torch.no_grad():

@@ -12,7 +12,7 @@ from scene.gaussian_model import GaussianModel
 from scene.cameras import Camera, CameraGaussianAvatars
 from arguments import ModelParams
 from utils.general_utils import PILtoTensor
-from utils.graphics_utils import focal2fov
+from utils.graphics_utils import focal2fov, fov2focal
 
 import tloaders
 
@@ -149,8 +149,9 @@ class SceneGaussianAvatars:
             K = sample.K
             fx = K[0, 0]
             fy = K[1, 1]
-            fovx = focal2fov(fx, sample.width)
-            fovy = focal2fov(fy, sample.height)
+            fovx = sample.fovx
+            fovy = focal2fov(fov2focal(fovx, sample.width), sample.height)
+
             
             c2w = sample.c2w
             width, height = sample.width, sample.height
@@ -176,9 +177,12 @@ class SceneGaussianAvatars:
             mask_fname = os.path.basename(msk_path)
             mouth_mask_path = os.path.join(mask_dir, '..', 'parsing', f'{mask_fname.replace(".png","")}_mouth.png')
             
-            c2w = np.linalg.inv(c2w)
-            T = c2w[:3, 3]
-            R = np.transpose(c2w[:3, :3])
+            w2c = np.linalg.inv(c2w)
+            R = np.transpose(w2c[:3, :3])
+            T = w2c[:3, 3]
+            T[1] -= 0.065
+            # T = sample.campos
+            
 
             # fl_trans[:, 1] += 0.07
         
