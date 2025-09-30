@@ -210,8 +210,10 @@ class SceneGaussianAvatars:
                 width=width,
                 height=height,
                 colmap_id=sample.uid,
-                trans=np.array([0.0, -0.078, 0.0]),
-                campos=torch.from_numpy(sample.campos).to(dtype=torch.float32)
+                c2w=c2w,
+                # trans=np.array([0.0, -0.078, 0.0]),
+                campos=torch.from_numpy(sample.campos).to(dtype=torch.float32),
+                K=sample.K
             )]
 
     

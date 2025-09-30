@@ -126,7 +126,11 @@ class CameraGaussianAvatars(torch.nn.Module):
         height,
         uid,
         campos,
-        trans=np.array([0.0, 0.0, 0.0]), scale=1.0, data_device = "cuda"
+        trans=np.array([0.0, 0.0, 0.0]), 
+        scale=1.0, 
+        data_device = "cuda",
+        K=None,
+        c2w=None
     ) -> None:
         super(CameraGaussianAvatars, self).__init__()
 
@@ -137,6 +141,8 @@ class CameraGaussianAvatars(torch.nn.Module):
         self.FoVx = FoVx
         self.FoVy = FoVy
         self.image_name = image_name
+        self.K = K
+        self.c2w = c2w
 
         try:
             self.data_device = torch.device(data_device)
