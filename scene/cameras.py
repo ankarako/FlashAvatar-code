@@ -125,6 +125,7 @@ class CameraGaussianAvatars(torch.nn.Module):
         width,
         height,
         uid,
+        campos,
         trans=np.array([0.0, 0.0, 0.0]), scale=1.0, data_device = "cuda"
     ) -> None:
         super(CameraGaussianAvatars, self).__init__()
@@ -192,7 +193,8 @@ class CameraGaussianAvatars(torch.nn.Module):
         self.world_view_transform = torch.tensor(getWorld2View2(R, T, trans, scale)).transpose(0, 1).cuda()
         self.projection_matrix = getProjectionMatrix(znear=self.znear, zfar=self.zfar, fovX=self.FoVx, fovY=self.FoVy).transpose(0,1).cuda()
         self.full_proj_transform = (self.world_view_transform.unsqueeze(0).bmm(self.projection_matrix.unsqueeze(0))).squeeze(0)
-        self.camera_center = self.world_view_transform.inverse()[3, :3]
+        # self.camera_center = self.world_view_transform.inverse()[3, :3]
+        self.camera_center = campos.to(self.data_device)
 
 class MiniCam:
     def __init__(self, width, height, fovy, fovx, znear, zfar, world_view_transform, full_proj_transform):

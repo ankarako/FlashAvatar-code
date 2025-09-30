@@ -13,6 +13,6 @@ flame/FLAME_masks
 .venv
 chkp
 .vscode
-build
+*build*
 flame2023
 output

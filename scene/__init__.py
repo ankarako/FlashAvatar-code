@@ -180,7 +180,7 @@ class SceneGaussianAvatars:
             w2c = np.linalg.inv(c2w)
             R = np.transpose(w2c[:3, :3])
             T = w2c[:3, 3]
-            T[1] -= 0.065
+            # T[1] -= 0.065
             # T = sample.campos
             
 
@@ -209,7 +209,9 @@ class SceneGaussianAvatars:
                 image_name=image_path,
                 width=width,
                 height=height,
-                colmap_id=sample.uid
+                colmap_id=sample.uid,
+                trans=np.array([0.0, -0.078, 0.0]),
+                campos=torch.from_numpy(sample.campos).to(dtype=torch.float32)
             )]
 
     

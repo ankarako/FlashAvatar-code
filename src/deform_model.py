@@ -138,7 +138,7 @@ class Deform_Model(nn.Module):
         scale_coef = deforms[..., 7:]
         scale_coef = torch.exp(scale_coef)
 
-        geometry = self.flame_model.forward(
+        geometry, joints = self.flame_model.forward(
             shape_code,
             expr_code,
             rot,
@@ -148,7 +148,8 @@ class Deform_Model(nn.Module):
             trans,
             static_offset=self.static_offset,
             return_lmks=False,
-            zero_centered_at_root_node=False
+            zero_centered_at_root_node=False,
+            return_posed_joints=True
         )
         # geometry = self.flame_model.forward_geo(
         #     shape_code,
@@ -157,6 +158,10 @@ class Deform_Model(nn.Module):
         #     eye_pose_params=eyes_pose,
         #     eyelid_params=None,
         # )
+        # neck_trans = joints[:, 1]
+        # root_trans = joints[:, 0]
+        # geometry -= neck_trans
+        # geometry -= root_trans
         face_vertices = face_vertices_gen(geometry, self.tri_faces.expand(batch_size, -1, -1))
 
         # rasterize face_vertices to uv space
@@ -174,9 +179,9 @@ class Deform_Model(nn.Module):
         verts_final = uv_vertices + uv_vertices_deforms
 
         # conduct mask
-        verts_final = verts_final[:, self.uv_head_idx, :]
-        rot_delta = rot_delta[:, self.uv_head_idx, :]
-        scale_coef = scale_coef[:, self.uv_head_idx, :]
+        # verts_final = verts_final[:, self.uv_head_idx, :]
+        # rot_delta = rot_delta[:, self.uv_head_idx, :]
+        # scale_coef = scale_coef[:, self.uv_head_idx, :]
 
         return verts_final, rot_delta, scale_coef
     
