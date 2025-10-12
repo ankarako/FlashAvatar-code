@@ -134,7 +134,8 @@ class SceneGaussianAvatars:
             "GaussianAvatars",
             data_root=data_root,
             transforms_filename=transforms_filename,
-            prefetch=prefetch
+            prefetch=prefetch,
+            flip_yz=True
         )
 
         # parse our flame samples to Camera objects
@@ -185,7 +186,7 @@ class SceneGaussianAvatars:
             
 
             # fl_trans[:, 1] += 0.07
-        
+            campos = sample.campos
 
             self.cameras += [CameraGaussianAvatars(
                 uid = sample.uid,
@@ -212,7 +213,7 @@ class SceneGaussianAvatars:
                 colmap_id=sample.uid,
                 c2w=c2w,
                 # trans=np.array([0.0, -0.078, 0.0]),
-                campos=torch.from_numpy(sample.campos).to(dtype=torch.float32),
+                campos=torch.from_numpy(campos).to(dtype=torch.float32),
                 K=sample.K
             )]
 
