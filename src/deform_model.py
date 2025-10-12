@@ -57,6 +57,8 @@ class Deform_Model(nn.Module):
             hidden_dim=256,
             hidden_layers=6
         )
+        torch.nn.init.zeros_(self.deformNet.output_linear.weight)
+        torch.nn.init.zeros_(self.deformNet.output_linear.bias)
         
     def example_init(self, codedict, static_offset):
         # speed up
